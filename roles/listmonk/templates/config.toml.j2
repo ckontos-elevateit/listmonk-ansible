@@ -1,0 +1,22 @@
+[app]
+address      = "{{ listmonk_listen_host }}:{{ listmonk_listen_port }}"
+timezone     = "{{ timezone }}"
+
+
+
+[db]
+host     = "localhost"
+port     = 5432
+user     = "{{ db_user }}"
+password = "{{ db_password }}"
+database = "{{ db_name }}"
+ssl_mode = "disable"
+
+[smtp]
+host       = "{{ smtp_host }}"
+port       = {{ smtp_port }}
+username   = "{{ smtp_user }}"
+password   = "{{ smtp_password }}"
+from_email = "{{ smtp_from }}"
+tls_enabled     = true
+tls_skip_verify = false

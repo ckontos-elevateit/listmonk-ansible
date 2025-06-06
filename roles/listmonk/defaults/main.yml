@@ -1,0 +1,13 @@
+# Listmonk binary
+listmonk_version: "v5.0.1"
+listmonk_download_url: "https://github.com/knadh/listmonk/releases/download/{{ listmonk_version }}/listmonk_{{ listmonk_version|replace('v','') }}_linux_amd64.tar.gz"
+
+# PostgreSQL
+postgres_version: 16
+
+# Listmonk listen
+listmonk_listen_host: "127.0.0.1"
+listmonk_listen_port: 9000
+
+# Scheduler timezone
+timezone: "UTC"

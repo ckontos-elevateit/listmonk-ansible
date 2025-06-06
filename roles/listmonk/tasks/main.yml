@@ -1,0 +1,128 @@
+---
+# ---------- Basics ----------
+- name: Ensure base packages
+  apt:
+    name: [curl, ca-certificates, gnupg, tar]
+    state: present
+    update_cache: true
+
+# ---------- PostgreSQL ----------
+- name: Add PGDG key
+  apt_key:
+    url: https://download.postgresql.org/pub/repos/apt/ACCC4CF8.asc
+    state: present
+
+- name: Add PGDG repo
+  apt_repository:
+    repo: "deb http://apt.postgresql.org/pub/repos/apt {{ ansible_distribution_release }}-pgdg main"
+    state: present
+
+- name: Install PostgreSQL {{ postgres_version }}
+  apt:
+    name:
+      - "postgresql-{{ postgres_version }}"
+      - "postgresql-client-{{ postgres_version }}"
+    state: present
+    update_cache: true
+
+# ---------- Database & role ----------
+- name: Ensure listmonk DB user
+  become_user: postgres
+  postgresql_user:
+    name: "{{ db_user }}"
+    password: "{{ db_password }}"
+    state: present
+
+- name: Ensure listmonk database owned by that user
+  become_user: postgres
+  postgresql_db:
+    name: "{{ db_name }}"
+    owner: "{{ db_user }}"
+    encoding: "UTF8"
+    state: present
+
+
+# ---------- Listmonk ----------
+- name: Create directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    mode: "0755"
+  loop:
+    - /opt/listmonk
+    - /opt/listmonk/{{ listmonk_version }}
+    - /etc/listmonk
+
+- name: Download Listmonk tarball
+  get_url:
+    url: "{{ listmonk_download_url }}"
+    dest: /tmp/listmonk.tar.gz
+    mode: "0644"
+
+- name: Extract binary
+  unarchive:
+    src: /tmp/listmonk.tar.gz
+    dest: "/opt/listmonk/{{ listmonk_version }}"
+    remote_src: true
+    creates: "/opt/listmonk/{{ listmonk_version }}/listmonk"
+
+- name: Symlink /usr/local/bin/listmonk
+  file:
+    src: "/opt/listmonk/{{ listmonk_version }}/listmonk"
+    dest: /usr/local/bin/listmonk
+    state: link
+
+# ---------- Configuration ----------
+- name: Deploy config.toml
+  template: { src: config.toml.j2, dest: /etc/listmonk/config.toml, owner: root, group: www-data, mode: "0640" }
+  notify: restart listmonk
+
+- name: Deploy systemd unit
+  template: { src: listmonk.service.j2, dest: /etc/systemd/system/listmonk.service, owner: root, mode: "0644" }
+  notify: [daemon-reload, restart listmonk]
+
+# ---------- Initialise Listmonk DB (idempotent) ----------
+
+# ---------- Always ensure DB schema is up-to-date ----------
+- name: Run listmonk --install/upgrade (idempotent)
+  become_user: www-data
+  command: >
+    /usr/local/bin/listmonk --install --yes --upgrade
+    --config /etc/listmonk/config.toml
+  register: lm_install
+  changed_when: "'Applying' in lm_install.stdout or 'Creating' in lm_install.stdout"
+  notify: restart listmonk
+
+
+- name: Enable & start Listmonk
+  systemd: { name: listmonk, state: started, enabled: true }
+
+# ---------- NGINX + TLS ----------
+- name: Install NGINX, Certbot, UFW
+  apt: { name: [nginx, certbot, python3-certbot-nginx, ufw], state: present, update_cache: true }
+
+- name: Deploy NGINX vhost
+  template: { src: nginx_listmonk.conf.j2, dest: /etc/nginx/sites-available/listmonk.conf }
+  notify: reload nginx
+
+- name: Enable vhost
+  file: { src: /etc/nginx/sites-available/listmonk.conf, dest: /etc/nginx/sites-enabled/listmonk.conf, state: link }
+  notify: reload nginx
+
+- name: Allow HTTP/HTTPS in UFW
+  ufw: { rule: allow, port: "{{ item }}", proto: tcp }
+  loop: [80, 443]
+
+- name: Obtain Let’s Encrypt cert
+  when: not use_self_signed|bool
+  command: >
+    certbot --nginx --non-interactive --agree-tos --quiet
+            -m {{ letsencrypt_email }}
+            -d {{ listmonk_domain }}
+            --redirect --hsts
+  args: { creates: "/etc/letsencrypt/live/{{ listmonk_domain }}/fullchain.pem" }
+  notify: reload nginx
+
+- include_tasks: selfsigned.yml
+  when: use_self_signed|bool

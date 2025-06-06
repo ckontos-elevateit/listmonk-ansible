@@ -1,0 +1,35 @@
+upstream listmonk_upstream {
+    server 127.0.0.1:{{ listmonk_listen_port }};
+    keepalive 16;
+}
+
+{% if use_self_signed|bool %}
+server {
+    listen 443 ssl;
+    server_name {{ listmonk_domain }};
+
+    ssl_certificate     /etc/ssl/listmonk/listmonk.crt;
+    ssl_certificate_key /etc/ssl/listmonk/listmonk.key;
+
+    location / {
+        proxy_pass         http://listmonk_upstream;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}
+{% endif %}
+
+server {
+    listen 80;
+    server_name {{ listmonk_domain }};
+
+    location / {
+        proxy_pass         http://listmonk_upstream;
+        proxy_set_header   Host              $host;
+        proxy_set_header   X-Real-IP         $remote_addr;
+        proxy_set_header   X-Forwarded-For   $proxy_add_x_forwarded_for;
+        proxy_set_header   X-Forwarded-Proto $scheme;
+    }
+}

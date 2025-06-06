@@ -1,0 +1,43 @@
+---
+- hosts: all
+  become: true
+
+  vars_prompt:
+    - name: listmonk_domain
+      prompt: "FQDN for Listmonk (e.g. mail.example.com)"
+      private: no
+    - name: letsencrypt_email
+      prompt: "E-mail for Let’s Encrypt expiry notices"
+      private: no
+
+    # Amazon SES
+    - name: aws_region
+      prompt: "AWS Region for SES (e.g. us-east-1, eu-central-1)"
+      private: no
+    - name: ses_smtp_username
+      prompt: "Amazon SES SMTP username (looks like AKIA…)"
+      private: no
+    - name: ses_smtp_password
+      prompt: "Amazon SES SMTP password"
+      private: yes
+    - name: smtp_from
+      prompt: "From: address verified in SES (e.g. news@mail.example.com)"
+      private: no
+
+    # PostgreSQL
+    - name: db_password
+      prompt: "PostgreSQL password for the listmonk user"
+      private: yes
+
+  vars:
+    listmonk_version: "v5.0.1"              # latest stable at 25 May 2025
+    smtp_host: "email-smtp.{{ aws_region }}.amazonaws.com"
+    smtp_port: 587
+    smtp_user: "{{ ses_smtp_username }}"
+    smtp_password: "{{ ses_smtp_password }}"
+    db_user: listmonk
+    db_name: listmonk
+    use_self_signed: true        # change to false when you move to a real domain
+
+  roles:
+    - listmonk

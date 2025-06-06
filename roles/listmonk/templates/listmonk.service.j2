@@ -1,0 +1,15 @@
+[Unit]
+Description=Listmonk Newsletter Manager
+After=network.target postgresql.service
+
+[Service]
+Type=simple
+Environment=LISTMONK_CONFIG=/etc/listmonk/config.toml
+ExecStart=/usr/local/bin/listmonk --config /etc/listmonk/config.toml
+Restart=on-failure
+User=www-data
+Group=www-data
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target
